@@ -4,10 +4,7 @@
 : ${DIALOG_ESC=255}
 
 # install prereqs
-
-(apk add -U dialog bash > /tmp/pre.log)
-dialog --clear --backtitle "$APP_TITLE" --sleep 3 --tailbox /tmp/pre.log 10 25 \
-    "Loading..." 8 50
+apk add -U dialog bash >/dev/null 2>&1
 
 export APP_TITLE="Terra OS"
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
