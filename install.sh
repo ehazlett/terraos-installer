@@ -36,8 +36,6 @@ do
             echo "Canceling install..."
             exit 0
             ;;
-        *)
-            sleep 2
-            ;;
     esac
+    sleep 5
 done

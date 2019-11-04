@@ -3,8 +3,10 @@ set -e
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 title="Install Terra"
-tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$
-trap "rm -f $tmpfile" 0 1 2 5 15
+tmpfile=$(mktemp 2>/dev/null) || tmpfile=/tmp/test$$
+tmppass=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+tmppassconfirm=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+trap "rm -f $tmpfile $tmppass $tmppassconfirm" 0 1 2 5 15
 
 dialog --title "$title" --inputbox "Enter system disk: " \
 	10 60 /dev/vda 2> $tmpfile
@@ -12,6 +14,17 @@ dialog --title "$title" --inputbox "Enter system disk: " \
 dialog --title "$title" --yesno "This will destroy all data on the disk.  Continue?" 5 60
 
 if [[ $? -eq 0 ]]; then
+    # prompt for encryption pass
+    while true; do
+        dialog --title "$title" --passwordbox "Enter system encryption passphrase: " 10 60 2> $tmppass
+        dialog --title "$title" --passwordbox "Enter system encryption passphrase (confirm): " 10 60 2> $tmppassconfirm
+        pass=$(cat $tmppass)
+        passconfirm=$(cat $tmppassconfirm)
+        if [ "${pass}" = "${passconfirm}" ]; then
+            break
+        fi
+        dialog --title "$title" --msgbox "Passwords do not match.  Try again."
+    done
     # apk
     setup-apkrepos -1
     apk update
@@ -40,12 +53,14 @@ if [[ $? -eq 0 ]]; then
     fi
     sgdisk -og ${disk}
     sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
-    mkfs.vfat -F32 ${part1}
     sgdisk -n 2:0:0 -t 2:8300 ${disk}
-    sync
+    # wait for disk to settle
+    sync && partprobe && sleep 3
+    mkfs.vfat -F32 ${part1}
     # encryption
-    cryptsetup luksFormat ${part2}
-    cryptsetup luksOpen ${part2} system
+    encpass=$(cat $tmppass)
+    echo -n "$encpass" | cryptsetup luksFormat -q ${part2} -
+    echo -n "$encpass" | cryptsetup luksOpen ${part2} system -
     # zfs
     zpool create \
         -o ashift=12 \
