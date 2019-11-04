@@ -1,0 +1,4 @@
+#!/bin/sh
+setup-interfaces
+rc-service networking start
+rc-update add networking

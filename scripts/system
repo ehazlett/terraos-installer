@@ -1,0 +1,91 @@
+#!/bin/sh
+set -e
+title="Install Terra"
+tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$
+trap "rm -f $tmpfile" 0 1 2 5 15
+
+dialog --title "$title" --inputbox "Enter system disk: " \
+	10 60 /dev/vda 2> $tmpfile
+
+dialog --title "$title" --yesno "This will destroy all data on the disk.  Continue?" 5 60
+
+if [[ $? -eq 0 ]]; then
+    # apk
+    setup-apkrepos -1
+    apk update
+    # prereqs
+    apk add \
+        cryptsetup \
+        zfs \
+        zfs-udev \
+        zfs-scripts \
+        sgdisk \
+        efibootmgr \
+        zfs-scripts
+    modprobe zfs
+    # ntp
+    setup-ntp -c busybox
+    # ssh
+    setup-sshd -c openssh
+    # disk
+    disk=$(cat $tmpfile)
+    part1=${disk}1
+    part2=${disk}2
+    if [[ $disk == *"nvme"* ]]; then
+        part1=${disk}p1
+        part2=${disk}p2
+        nvme="yes"
+    fi
+    sgdisk -og ${disk}
+    sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
+    mkfs.vfat -F32 ${part1}
+    sgdisk -n 2:0:0 -t 2:8300 ${disk}
+    sync
+    # encryption
+    cryptsetup luksFormat ${part2}
+    cryptsetup luksOpen ${part2} system
+    # zfs
+    zpool create \
+        -o ashift=12 \
+        -O normalization=formD \
+        -O atime=off \
+        -m none \
+        -R /mnt \
+        -O compression=lz4 \
+        tank /dev/mapper/system
+    zfs create -o mountpoint=none -o canmount=off tank/root
+    zfs create -o mountpoint=/ tank/root/terra
+    zfs create -o mountpoint=/home tank/home
+    # boot
+    mkdir -p /mnt/boot
+    mount -t vfat ${part1} /mnt/boot
+    # install base
+    setup-disk -m sys /mnt
+    # efi
+    mkdir -p /mnt/boot/EFI/syslinux
+    cp -r /mnt/usr/share/syslinux/efi64/* /mnt/boot/EFI/syslinux/
+    mv /mnt/boot/extlinux.conf /mnt/boot/EFI/syslinux/extlinux.conf
+    sed -i 's/vmlinuz-vanilla/\/vmlinuz-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
+    sed -i 's/initramfs-vanilla/\/initramfs-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
+    dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/gptmbr.bin of=${disk}
+    modprobe efivars
+    efibootmgr -c -d ${disk} -l '\EFI\syslinux\syslinux.efi' -L terra -p 1
+    # crypttab
+    echo "system ${part2} none luks" > /mnt/etc/crypttab
+    # remove zfs and unneeded mounts from /mnt/etc/fstab
+    sed -i '/^tank/d' /mnt/etc/fstab
+    sed -i '/cdrom/d' /mnt/etc/fstab
+    sed -i '/usbdisk/d' /mnt/etc/fstab
+    # append cryptsetup to /mnt/etc/mkinitfs/mkinitfs.conf
+    sed -i 's/base/base cryptsetup/' /mnt/etc/mkinitfs/mkinitfs.conf
+    if [ ! -z "$nvme" ]; then
+        # add nvme to /mnt/etc/mkinitfs/mkinitfs.conf
+        sed -i 's/base/base nvme/' /mnt/etc/mkinitfs/mkinitfs.conf
+    fi
+    # cryptsetup for root
+    subpart=$(echo $part2 | sed 's/\//\\\//g')
+    sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' /mnt/boot/EFI/syslinux/extlinux.conf
+    # update initramfs
+    mkinitfs -c /mnt/etc/mkinitfs/mkinitfs.conf -b /mnt $(ls /mnt/lib/modules/)
+fi
+
