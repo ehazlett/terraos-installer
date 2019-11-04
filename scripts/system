@@ -8,107 +8,173 @@ tmppass=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
 tmppassconfirm=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
 trap "rm -f $tmpfile $tmppass $tmppassconfirm" 0 1 2 5 15
 
-dialog --title "$title" --inputbox "Enter system disk: " \
+dialog --backtitle "$APP_TITLE" --title "$title" --inputbox "Enter system disk: " \
 	10 60 /dev/vda 2> $tmpfile
 
-dialog --title "$title" --yesno "This will destroy all data on the disk.  Continue?" 5 60
+dialog --backtitle "$APP_TITLE" --title "$title" --defaultno --yesno "This will destroy all data on the disk.  Continue?" 5 60
 
 if [[ $? -eq 0 ]]; then
     # prompt for encryption pass
     while true; do
-        dialog --title "$title" --passwordbox "Enter system encryption passphrase: " 10 60 2> $tmppass
-        dialog --title "$title" --passwordbox "Enter system encryption passphrase (confirm): " 10 60 2> $tmppassconfirm
+        dialog --backtitle "$APP_TITLE" --title "$title" --passwordbox "Enter system encryption passphrase: " 10 60 2> $tmppass
+        dialog --backtitle "$APP_TITLE" --title "$title" --passwordbox "Enter system encryption passphrase (confirm): " 10 60 2> $tmppassconfirm
         pass=$(cat $tmppass)
         passconfirm=$(cat $tmppassconfirm)
         if [ "${pass}" = "${passconfirm}" ]; then
             break
         fi
-        dialog --title "$title" --msgbox "Passwords do not match.  Try again."
+        dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Passwords do not match.  Try again."
     done
+    counter=0
     # apk
-    setup-apkrepos -1
-    apk update
-    # prereqs
-    apk add \
-        cryptsetup \
-        zfs \
-        zfs-udev \
-        zfs-scripts \
-        sgdisk \
-        efibootmgr \
-        zfs-scripts
-    modprobe zfs
-    # ntp
-    setup-ntp -c busybox
-    # ssh
-    setup-sshd -c openssh
-    # disk
-    disk=$(cat $tmpfile)
-    part1=${disk}1
-    part2=${disk}2
-    if [[ $disk == *"nvme"* ]]; then
-        part1=${disk}p1
-        part2=${disk}p2
-        nvme="yes"
-    fi
-    sgdisk -og ${disk}
-    sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
-    sgdisk -n 2:0:0 -t 2:8300 ${disk}
-    # wait for disk to settle
-    sync && partprobe && sleep 3
-    mkfs.vfat -F32 ${part1}
-    # encryption
-    encpass=$(cat $tmppass)
-    echo -n "$encpass" | cryptsetup luksFormat -q ${part2} -
-    echo -n "$encpass" | cryptsetup luksOpen ${part2} system -
-    # zfs
-    zpool create \
-        -o ashift=12 \
-        -O normalization=formD \
-        -O atime=off \
-        -m none \
-        -R /mnt \
-        -O compression=lz4 \
-        tank /dev/mapper/system
-    zfs create -o mountpoint=none -o canmount=off tank/root
-    zfs create -o mountpoint=/ tank/root/terra
-    zfs create -o mountpoint=/home tank/home
-    # boot
-    mkdir -p /mnt/boot
-    mount -t vfat ${part1} /mnt/boot
-    # install base
-    setup-disk -m sys /mnt
-    # efi
-    mkdir -p /mnt/boot/EFI/syslinux
-    cp -r /mnt/usr/share/syslinux/efi64/* /mnt/boot/EFI/syslinux/
-    mv /mnt/boot/extlinux.conf /mnt/boot/EFI/syslinux/extlinux.conf
-    sed -i 's/vmlinuz-vanilla/\/vmlinuz-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
-    sed -i 's/initramfs-vanilla/\/initramfs-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
-    dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/gptmbr.bin of=${disk}
-    modprobe efivars
-    efibootmgr -c -d ${disk} -l '\EFI\syslinux\syslinux.efi' -L terra -p 1
-    # crypttab
-    echo "system ${part2} none luks" > /mnt/etc/crypttab
-    # remove zfs and unneeded mounts from /mnt/etc/fstab
-    sed -i '/^tank/d' /mnt/etc/fstab
-    sed -i '/cdrom/d' /mnt/etc/fstab
-    sed -i '/usbdisk/d' /mnt/etc/fstab
-    # append cryptsetup to /mnt/etc/mkinitfs/mkinitfs.conf
-    sed -i 's/base/base cryptsetup/' /mnt/etc/mkinitfs/mkinitfs.conf
-    if [ ! -z "$nvme" ]; then
-        # add nvme to /mnt/etc/mkinitfs/mkinitfs.conf
-        sed -i 's/base/base nvme/' /mnt/etc/mkinitfs/mkinitfs.conf
-    fi
-    # cryptsetup for root
-    subpart=$(echo $part2 | sed 's/\//\\\//g')
-    sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' /mnt/boot/EFI/syslinux/extlinux.conf
-    # bootsplash
-    cp ${BASE_DIR}/media/bg.jpg /mnt/boot/EFI/syslinux/bg.jpg
-    echo "MENU BACKGROUND bg.jpg" >> /mnt/boot/EFI/syslinux/extlinux.conf
-    echo "MENU RESOLUTION 1024 683" >> /mnt/boot/EFI/syslinux/extlinux.conf
-    # motd
-    echo "Welcome to TerraOS!" > /mnt/etc/motd
-    # update initramfs
-    mkinitfs -c /mnt/etc/mkinitfs/mkinitfs.conf -b /mnt $(ls /mnt/lib/modules/)
+    (
+        counter=10
+        cat <<EOF
+XXX
+$counter
+Configuring installation environment...
+XXX
+EOF
+        setup-apkrepos -1
+        apk update
+        # prereqs
+        apk add \
+            cryptsetup \
+            zfs \
+            zfs-udev \
+            zfs-scripts \
+            sgdisk \
+            efibootmgr \
+            zfs-scripts
+        modprobe zfs
+        # ntp
+        setup-ntp -c busybox
+        # ssh
+        setup-sshd -c openssh
+        # disk
+        sleep 0.5
+        counter=15
+        cat <<EOF
+XXX
+$counter
+Configuring system disk...
+XXX
+EOF
+        disk=$(cat $tmpfile)
+        part1=${disk}1
+        part2=${disk}2
+        if [[ $disk == *"nvme"* ]]; then
+            part1=${disk}p1
+            part2=${disk}p2
+            nvme="yes"
+        fi
+        sgdisk -og ${disk}
+        sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
+        sgdisk -n 2:0:0 -t 2:8300 ${disk}
+        # wait for disk to settle
+        sync && partprobe && sleep 3
+        mkfs.vfat -F32 ${part1}
+        # encryption
+        encpass=$(cat $tmppass)
+        echo -n "$encpass" | cryptsetup luksFormat -q ${part2} -
+        echo -n "$encpass" | cryptsetup luksOpen ${part2} system -
+        # zfs
+        sleep 0.5
+        counter=20
+        cat <<EOF
+XXX
+$counter
+Configuring ZFS...
+XXX
+EOF
+        zpool create \
+            -o ashift=12 \
+            -O normalization=formD \
+            -O atime=off \
+            -m none \
+            -R /mnt \
+            -O compression=lz4 \
+            tank /dev/mapper/system
+        zfs create -o mountpoint=none -o canmount=off tank/root
+        zfs create -o mountpoint=/ tank/root/terra
+        zfs create -o mountpoint=/home tank/home
+        # boot
+        mkdir -p /mnt/boot
+        mount -t vfat ${part1} /mnt/boot
+        sleep 0.5
+        counter=30
+        # install base
+        cat <<EOF
+XXX
+$counter
+Installing base system...
+XXX
+EOF
+        setup-disk -m sys /mnt >/dev/null 2>&1
+        # efi
+        sleep 0.5
+        counter=50
+        cat <<EOF
+XXX
+$counter
+Configuring boot...
+XXX
+EOF
+        mkdir -p /mnt/boot/EFI/syslinux
+        cp -r /mnt/usr/share/syslinux/efi64/* /mnt/boot/EFI/syslinux/
+        mv /mnt/boot/extlinux.conf /mnt/boot/EFI/syslinux/extlinux.conf
+        sed -i 's/vmlinuz-vanilla/\/vmlinuz-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
+        sed -i 's/initramfs-vanilla/\/initramfs-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
+        dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/gptmbr.bin of=${disk} >/dev/null 2>&1
+        modprobe efivars
+        efibootmgr -c -d ${disk} -l '\EFI\syslinux\syslinux.efi' -L terra -p 1 >/dev/null 2>&1
+        # crypttab
+        echo "system ${part2} none luks" > /mnt/etc/crypttab
+        # remove zfs and unneeded mounts from /mnt/etc/fstab
+        sleep 0.5
+        counter=60
+        cat <<EOF
+XXX
+$counter
+Configuring system...
+XXX
+EOF
+        sed -i '/^tank/d' /mnt/etc/fstab
+        sed -i '/cdrom/d' /mnt/etc/fstab
+        sed -i '/usbdisk/d' /mnt/etc/fstab
+        # append cryptsetup to /mnt/etc/mkinitfs/mkinitfs.conf
+        sed -i 's/base/base cryptsetup/' /mnt/etc/mkinitfs/mkinitfs.conf
+        if [ ! -z "$nvme" ]; then
+            # add nvme to /mnt/etc/mkinitfs/mkinitfs.conf
+            sed -i 's/base/base nvme/' /mnt/etc/mkinitfs/mkinitfs.conf
+        fi
+        # cryptsetup for root
+        subpart=$(echo $part2 | sed 's/\//\\\//g')
+        sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' /mnt/boot/EFI/syslinux/extlinux.conf
+        # bootsplash
+        cp ${BASE_DIR}/media/bg.jpg /mnt/boot/EFI/syslinux/bg.jpg
+        echo "MENU BACKGROUND bg.jpg" >> /mnt/boot/EFI/syslinux/extlinux.conf
+        echo "MENU RESOLUTION 1024 683" >> /mnt/boot/EFI/syslinux/extlinux.conf
+        # motd
+        echo "Welcome to TerraOS!" > /mnt/etc/motd
+        # update initramfs
+        sleep 0.5
+        counter=90
+        cat <<EOF
+XXX
+$counter
+Updating initial ramdisk...
+XXX
+EOF
+        mkinitfs -c /mnt/etc/mkinitfs/mkinitfs.conf -b /mnt $(ls /mnt/lib/modules/)
+        counter=100
+        cat <<EOF
+XXX
+$counter
+Installation complete.  Please reboot.
+XXX
+EOF
+        sleep 3
+    ) | dialog --backtitle "$APP_TITLE" --title "Terra Installation" --gauge "Please wait..." 7 70 0
 fi
 

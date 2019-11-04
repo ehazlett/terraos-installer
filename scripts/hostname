@@ -2,6 +2,6 @@
 tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$
 trap "rm -f $tmpfile" 0 1 2 5 15
 
-dialog --inputbox "Hostname" \
+dialog --backtitle "$APP_TITLE" --inputbox "Hostname" \
 	10 60 terra 2> $tmpfile
 setup-hostname $(cat $tmpfile)

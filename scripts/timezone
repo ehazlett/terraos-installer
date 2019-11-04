@@ -2,6 +2,6 @@
 tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$
 trap "rm -f $tmpfile" 0 1 2 5 15
 
-dialog --inputbox "Timezone: " \
+dialog --backtitle "$APP_TITLE" --inputbox "Timezone: " \
 	5 60 UTC 2> $tmpfile
 setup-timezone -z $(cat $tmpfile)
