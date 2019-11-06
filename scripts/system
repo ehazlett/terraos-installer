@@ -36,7 +36,7 @@ Configuring installation environment...
 XXX
 EOF
         setup-apkrepos -1
-        apk update
+        apk update >/dev/null 2>&1
         # prereqs
         apk add \
             cryptsetup \
@@ -72,7 +72,7 @@ EOF
         sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
         sgdisk -n 2:0:0 -t 2:8300 ${disk}
         # wait for disk to settle
-        sync && partprobe && sleep 3
+        sync && partprobe ${disk} && sleep 3
         mkfs.vfat -F32 ${part1}
         # encryption
         encpass=$(cat $tmppass)
