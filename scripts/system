@@ -123,8 +123,8 @@ EOF
         mkdir -p /mnt/boot/EFI/syslinux
         cp -r /mnt/usr/share/syslinux/efi64/* /mnt/boot/EFI/syslinux/
         mv /mnt/boot/extlinux.conf /mnt/boot/EFI/syslinux/extlinux.conf
-        sed -i 's/vmlinuz-vanilla/\/vmlinuz-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
-        sed -i 's/initramfs-vanilla/\/initramfs-vanilla/g' /mnt/boot/EFI/syslinux/extlinux.conf
+        sed -i 's/vmlinuz-terra/\/vmlinuz-terra/g' /mnt/boot/EFI/syslinux/extlinux.conf
+        sed -i 's/initramfs-terra/\/initramfs-terra/g' /mnt/boot/EFI/syslinux/extlinux.conf
         dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/gptmbr.bin of=${disk} >/dev/null 2>&1
         modprobe efivars
         efibootmgr -c -d ${disk} -l '\EFI\syslinux\syslinux.efi' -L terra -p 1 >/dev/null 2>&1
