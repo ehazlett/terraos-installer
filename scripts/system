@@ -79,6 +79,7 @@ EOF
         echo -n "$encpass" | cryptsetup luksFormat -q ${part2} -
         echo -n "$encpass" | cryptsetup luksOpen ${part2} system -
         # zfs
+        rc-update add zfs-mount boot
         sleep 0.5
         counter=20
         cat <<EOF
