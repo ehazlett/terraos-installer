@@ -68,9 +68,41 @@ EOF
             part2=${disk}p2
             nvme="yes"
         fi
-        sgdisk -og ${disk}
-        sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
-        sgdisk -n 2:0:0 -t 2:8300 ${disk}
+
+        uefi=""
+        if [ -e /sys/firmware/efi/efivars ]; then
+            uefi="1"
+        fi
+
+        if [ ! -z "$uefi" ]; then
+            sgdisk -og ${disk}
+            sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
+            sgdisk -n 2:0:0 -t 2:8300 ${disk}
+        else
+            dd if=/dev/zero of=${disk} bs=1M count=32 >/dev/null
+            partprobe ${disk}
+            fdisk ${disk} <<EOF
+o
+n
+p
+1
+
++512M
+n
+p
+2
+
+
+a
+1
+t
+1
+b
+p
+w
+q
+EOF
+        fi
         # wait for disk to settle
         sync && partprobe ${disk} && sleep 3
         mkfs.vfat -F32 ${part1}
@@ -121,14 +153,18 @@ $counter
 Configuring boot...
 XXX
 EOF
-        mkdir -p /mnt/boot/EFI/syslinux
-        cp -r /mnt/usr/share/syslinux/efi64/* /mnt/boot/EFI/syslinux/
-        mv /mnt/boot/extlinux.conf /mnt/boot/EFI/syslinux/extlinux.conf
-        sed -i 's/vmlinuz-terra/\/vmlinuz-terra/g' /mnt/boot/EFI/syslinux/extlinux.conf
-        sed -i 's/initramfs-terra/\/initramfs-terra/g' /mnt/boot/EFI/syslinux/extlinux.conf
-        dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/gptmbr.bin of=${disk} >/dev/null 2>&1
-        modprobe efivars
-        efibootmgr -c -d ${disk} -l '\EFI\syslinux\syslinux.efi' -L terra -p 1 >/dev/null 2>&1
+        if [ ! -z "$uefi"]; then
+            mkdir -p /mnt/boot/EFI/syslinux
+            cp -r /mnt/usr/share/syslinux/efi64/* /mnt/boot/EFI/syslinux/
+            mv /mnt/boot/extlinux.conf /mnt/boot/EFI/syslinux/extlinux.conf
+            sed -i 's/vmlinuz-terra/\/vmlinuz-terra/g' /mnt/boot/EFI/syslinux/extlinux.conf
+            sed -i 's/initramfs-terra/\/initramfs-terra/g' /mnt/boot/EFI/syslinux/extlinux.conf
+            dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/gptmbr.bin of=${disk} >/dev/null 2>&1
+            modprobe efivars
+            efibootmgr -c -d ${disk} -l '\EFI\syslinux\syslinux.efi' -L terra -p 1 >/dev/null 2>&1
+        else
+            dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/mbr.bin of=${disk} >/dev/null 2>&1
+        fi
         # crypttab
         echo "system ${part2} none luks" > /mnt/etc/crypttab
         # remove zfs and unneeded mounts from /mnt/etc/fstab
@@ -150,12 +186,16 @@ EOF
             sed -i 's/base/base nvme/' /mnt/etc/mkinitfs/mkinitfs.conf
         fi
         # cryptsetup for root
+        bootdir="/mnt/boot"
+        if [ ! -z "$uefi" ]; then
+            bootdir="/mnt/boot/EFI/syslinux"
+        fi
         subpart=$(echo $part2 | sed 's/\//\\\//g')
-        sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' /mnt/boot/EFI/syslinux/extlinux.conf
+        sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' $bootdir/extlinux.conf
         # bootsplash
-        cp ${BASE_DIR}/media/bg.jpg /mnt/boot/EFI/syslinux/bg.jpg
-        echo "MENU BACKGROUND bg.jpg" >> /mnt/boot/EFI/syslinux/extlinux.conf
-        echo "MENU RESOLUTION 1024 683" >> /mnt/boot/EFI/syslinux/extlinux.conf
+        cp ${BASE_DIR}/media/bg.jpg $bootdir/bg.jpg
+        echo "MENU BACKGROUND bg.jpg" >> $bootdir/extlinux.conf
+        echo "MENU RESOLUTION 1024 683" >> $bootdir/extlinux.conf
         # motd
         echo "Welcome to TerraOS!" > /mnt/etc/motd
         # update initramfs
@@ -172,10 +212,11 @@ EOF
         cat <<EOF
 XXX
 $counter
-Installation complete.  Please reboot.
+Installation complete.
 XXX
 EOF
-        sleep 3
+        sleep 2
     ) | dialog --backtitle "$APP_TITLE" --title "Terra Installation" --gauge "Please wait..." 7 70 0
+    dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Installation successful.  Please reboot." 6 50
 fi
 
