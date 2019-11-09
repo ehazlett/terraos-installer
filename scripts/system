@@ -79,7 +79,7 @@ EOF
             sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
             sgdisk -n 2:0:0 -t 2:8300 ${disk}
         else
-            dd if=/dev/zero of=${disk} bs=1M count=32 >/dev/null
+            dd if=/dev/zero of=${disk} bs=1M count=32 >/dev/null 2>&1
             partprobe ${disk}
             fdisk ${disk} <<EOF
 o
