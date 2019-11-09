@@ -13,6 +13,8 @@ SCRIPTDIR=${BASE_DIR}/scripts
 tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$
 trap "rm -f $tmpfile" 0 1 2 5 15
 
+truncate -s0 $LOG
+
 dialog --clear --backtitle "$APP_TITLE" --msgbox  \
     "Welcome to Terra OS!" 8 50
 

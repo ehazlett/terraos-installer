@@ -76,8 +76,8 @@ EOF
 
         if [ ! -z "$uefi" ]; then
             sgdisk -og ${disk}
-            sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk}
-            sgdisk -n 2:0:0 -t 2:8300 ${disk}
+            sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk} >/dev/null 2>&1
+            sgdisk -n 2:0:0 -t 2:8300 ${disk} > /dev/null 2>&1
         else
             dd if=/dev/zero of=${disk} bs=1M count=32 >/dev/null 2>&1
             partprobe ${disk}
@@ -194,8 +194,17 @@ EOF
         sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' $bootdir/extlinux.conf
         # bootsplash
         cp ${BASE_DIR}/media/bg.jpg $bootdir/bg.jpg
-        echo "MENU BACKGROUND bg.jpg" >> $bootdir/extlinux.conf
-        echo "MENU RESOLUTION 1024 683" >> $bootdir/extlinux.conf
+        sed -i 's/DEFAULT.*/DEFAULT vesamenu.c32/' $bootdir/extlinux.conf
+        sed -i 's/MENU TITLE.*/MENU TITLE Terra OS/' $bootdir/extlinux.conf
+        sed -i 's/MENU AUTOBOOT.*/MENU AUTOBOOT Terra OS will boot in # seconds./' $bootdir/extlinux.conf
+        cat <<EOF>> $bootdir/extlinux.conf
+MENU BACKGROUND bg.jpg
+MENU RESOLUTION 1024 768
+MENU COLOR sel * #1a1a1a1a #dededede none
+MENU COLOR border * #dededede #00000000 none
+MENU COLOR title * #dededede #00000000 none
+MENU COLOR tabmsg * #dededede #00000000 none
+EOF
         # motd
         echo "Welcome to TerraOS!" > /mnt/etc/motd
         # update initramfs
