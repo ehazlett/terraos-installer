@@ -63,7 +63,8 @@ EOF
         disk=$(cat $tmpfile)
         part1=${disk}1
         part2=${disk}2
-        if [[ $disk == *"nvme"* ]]; then
+        echo $disk | grep "nvme"
+        if [ $? -eq 0 ]; then
             part1=${disk}p1
             part2=${disk}p2
             nvme="yes"
