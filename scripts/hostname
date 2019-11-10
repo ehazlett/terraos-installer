@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$
 trap "rm -f $tmpfile" 0 1 2 5 15
 

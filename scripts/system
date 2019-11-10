@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -25,6 +25,8 @@ if [[ $? -eq 0 ]]; then
         fi
         dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Passwords do not match.  Try again."
     done
+    disk=$(cat $tmpfile)
+    echo "starting installation to ${disk}" >> ${LOG}
     counter=0
     # apk
     (
@@ -35,9 +37,11 @@ $counter
 Configuring installation environment...
 XXX
 EOF
-        setup-apkrepos -1
-        apk update >/dev/null 2>&1
+        echo "setting up mirror ${MIRROR}" >> ${LOG}
+        setup-apkrepos "${MIRROR}"
+        apk update >> ${LOG} 2>&1
         # prereqs
+        echo "installing prereqs" >> ${LOG}
         apk add \
             cryptsetup \
             zfs \
@@ -45,12 +49,12 @@ EOF
             zfs-scripts \
             sgdisk \
             efibootmgr \
-            zfs-scripts
+            zfs-scripts >> ${LOG} 2>&1
         modprobe zfs
         # ntp
-        setup-ntp -c busybox
+        setup-ntp -c busybox >> ${LOG} 2>&1
         # ssh
-        setup-sshd -c openssh
+        setup-sshd -c openssh >> ${LOG} 2>&1
         # disk
         sleep 0.5
         counter=15
@@ -60,28 +64,33 @@ $counter
 Configuring system disk...
 XXX
 EOF
-        disk=$(cat $tmpfile)
+        # temporarily ignore errors to detect disk
+        set +e
         part1=${disk}1
         part2=${disk}2
         echo $disk | grep "nvme"
         if [ $? -eq 0 ]; then
+            echo "detected NVME disk" >> ${LOG}
             part1=${disk}p1
             part2=${disk}p2
             nvme="yes"
         fi
+        # exit on errors from here on
+        set -e
 
-        uefi=""
+        EFI=""
         if [ -e /sys/firmware/efi/efivars ]; then
-            uefi="1"
+            EFI="1"
         fi
 
-        if [ ! -z "$uefi" ]; then
+        if [ ! -z "$EFI" ]; then
+            echo "using EFI boot" >> ${LOG}
+            sgdisk -Z ${disk}
             sgdisk -og ${disk}
             sgdisk -n 1:0MiB:512MiB -t 1:EF00 ${disk} >/dev/null 2>&1
             sgdisk -n 2:0:0 -t 2:8300 ${disk} > /dev/null 2>&1
         else
             dd if=/dev/zero of=${disk} bs=1M count=32 >/dev/null 2>&1
-            partprobe ${disk}
             fdisk ${disk} <<EOF
 o
 n
@@ -105,9 +114,29 @@ q
 EOF
         fi
         # wait for disk to settle
-        sync && partprobe ${disk} && sleep 3
-        mkfs.vfat -F32 ${part1}
+        echo "waiting for disk to settle" >> ${LOG}
+        while true; do
+            find /dev | grep ${part1} > /dev/null
+            if [ $? -ne 0 ]; then
+                sync && partprobe ${disk} && sleep 1 && blockdev --rereadpt ${disk} && sleep 1
+                continue
+            fi
+            find /dev | grep ${part2} > /dev/null
+            if [ $? -ne 0 ]; then
+                sync && partprobe ${disk} && sleep 1 && blockdev --rereadpt ${disk} && sleep 1
+                continue
+            fi
+
+            echo "partitions ${part1} and ${part2} detected" >> ${LOG}
+            echo "  ${p1}" >> ${LOG}
+            echo "  ${p2}" >> ${LOG}
+            break
+        done
+        sleep 5
+        # format
+        mkfs.vfat -F32 ${part1} >> ${LOG} 2>&1
         # encryption
+        echo "setting up encryption on ${part2}" >> ${LOG}
         encpass=$(cat $tmppass)
         echo -n "$encpass" | cryptsetup luksFormat -q ${part2} -
         echo -n "$encpass" | cryptsetup luksOpen ${part2} system -
@@ -121,6 +150,7 @@ $counter
 Configuring ZFS...
 XXX
 EOF
+        echo "configuring ZFS for ${part2}" >> ${LOG}
         zpool create \
             -o ashift=12 \
             -O normalization=formD \
@@ -134,17 +164,20 @@ EOF
         zfs create -o mountpoint=/home tank/home
         # boot
         mkdir -p /mnt/boot
+        echo "formatting boot partition ${part1}" >> ${LOG}
         mount -t vfat ${part1} /mnt/boot
         sleep 0.5
         counter=30
         # install base
+        echo "installing base system" >> ${LOG}
         cat <<EOF
 XXX
 $counter
 Installing base system...
 XXX
 EOF
-        setup-disk -m sys /mnt >/dev/null 2>&1
+        # allow errors because on EFI systems the boot setup fails
+        (setup-disk -v -m sys /mnt >> ${LOG} 2>&1 || true)
         # efi
         sleep 0.5
         counter=50
@@ -154,7 +187,8 @@ $counter
 Configuring boot...
 XXX
 EOF
-        if [ ! -z "$uefi"]; then
+        if [ ! -z "$EFI" ]; then
+            echo "configuring /boot for EFI system" >> ${LOG}
             mkdir -p /mnt/boot/EFI/syslinux
             cp -r /mnt/usr/share/syslinux/efi64/* /mnt/boot/EFI/syslinux/
             mv /mnt/boot/extlinux.conf /mnt/boot/EFI/syslinux/extlinux.conf
@@ -164,6 +198,7 @@ EOF
             modprobe efivars
             efibootmgr -c -d ${disk} -l '\EFI\syslinux\syslinux.efi' -L terra -p 1 >/dev/null 2>&1
         else
+            echo "configuring /boot for BIOS system" >> ${LOG}
             dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/mbr.bin of=${disk} >/dev/null 2>&1
         fi
         # crypttab
@@ -183,14 +218,16 @@ EOF
         # append cryptsetup to /mnt/etc/mkinitfs/mkinitfs.conf
         sed -i 's/base/base cryptsetup/' /mnt/etc/mkinitfs/mkinitfs.conf
         if [ ! -z "$nvme" ]; then
+            echo "adding NVME support to initfs" >> ${LOG}
             # add nvme to /mnt/etc/mkinitfs/mkinitfs.conf
             sed -i 's/base/base nvme/' /mnt/etc/mkinitfs/mkinitfs.conf
         fi
         # cryptsetup for root
         bootdir="/mnt/boot"
-        if [ ! -z "$uefi" ]; then
+        if [ ! -z "$EFI" ]; then
             bootdir="/mnt/boot/EFI/syslinux"
         fi
+        echo "setting up boot directory ${bootdir}" >> ${LOG}
         subpart=$(echo $part2 | sed 's/\//\\\//g')
         sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' $bootdir/extlinux.conf
         # bootsplash
@@ -208,7 +245,6 @@ MENU COLOR tabmsg * #dededede #00000000 none
 EOF
         # motd
         echo "Welcome to TerraOS!" > /mnt/etc/motd
-        # update initramfs
         sleep 0.5
         counter=90
         cat <<EOF
@@ -217,6 +253,8 @@ $counter
 Updating initial ramdisk...
 XXX
 EOF
+        # update initramfs
+        echo "updating initfs" >> ${LOG}
         mkinitfs -c /mnt/etc/mkinitfs/mkinitfs.conf -b /mnt $(ls /mnt/lib/modules/)
         counter=100
         cat <<EOF
@@ -225,7 +263,7 @@ $counter
 Installation complete.
 XXX
 EOF
-        sleep 2
+        echo "installation complete" >> ${LOG}
     ) | dialog --backtitle "$APP_TITLE" --title "Terra Installation" --gauge "Please wait..." 7 70 0
     dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Installation successful.  Please reboot." 6 50
 fi

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 setup-interfaces
 rc-service networking start
 rc-update add networking

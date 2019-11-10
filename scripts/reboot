@@ -1,5 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 echo "Rebooting..."
 sync
 sleep 3
 reboot
+
+# exit 255 to exit installer menu
+exit 255
