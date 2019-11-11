@@ -1,6 +1,5 @@
 #!/bin/bash
 set -e
-BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 title="Install Terra"
 tmpfile=$(mktemp 2>/dev/null) || tmpfile=/tmp/test$$
@@ -229,12 +228,14 @@ EOF
         fi
         echo "setting up boot directory ${bootdir}" >> ${LOG}
         subpart=$(echo $part2 | sed 's/\//\\\//g')
-        sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' $bootdir/extlinux.conf
+        sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' ${bootdir}/extlinux.conf
         # bootsplash
-        cp ${BASE_DIR}/media/bg.jpg $bootdir/bg.jpg
-        sed -i 's/DEFAULT.*/DEFAULT vesamenu.c32/' $bootdir/extlinux.conf
-        sed -i 's/MENU TITLE.*/MENU TITLE Terra OS/' $bootdir/extlinux.conf
-        sed -i 's/MENU AUTOBOOT.*/MENU AUTOBOOT Terra OS will boot in # seconds./' $bootdir/extlinux.conf
+        echo "configuring bootsplash ${bootdir}/bg.jpg" >> ${LOG}
+        cp -f ${BASE_DIR}/media/bg.jpg ${bootdir}/bg.jpg
+        echo "updating boot config ${bootdir}/extlinux.conf" >> ${LOG}
+        sed -i 's/DEFAULT.*/DEFAULT vesamenu.c32/' ${bootdir}/extlinux.conf
+        sed -i 's/MENU TITLE.*/MENU TITLE Terra OS/' ${bootdir}/extlinux.conf
+        sed -i 's/MENU AUTOBOOT.*/MENU AUTOBOOT Terra OS will boot in # seconds./' ${bootdir}/extlinux.conf
         cat <<EOF>> $bootdir/extlinux.conf
 MENU BACKGROUND bg.jpg
 MENU RESOLUTION 1024 768
@@ -244,6 +245,7 @@ MENU COLOR title * #dededede #00000000 none
 MENU COLOR tabmsg * #dededede #00000000 none
 EOF
         # motd
+        echo "setting motd" >> ${LOG}
         echo "Welcome to TerraOS!" > /mnt/etc/motd
         sleep 0.5
         counter=90

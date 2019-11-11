@@ -7,8 +7,8 @@
 apk add -U dialog >/dev/null 2>&1
 
 export APP_TITLE="Terra OS"
-BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-SCRIPTDIR=${BASE_DIR}/scripts
+export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+export SCRIPTDIR=${BASE_DIR}/scripts
 export MIRROR=${MIRROR:-"-1"}
 export LOG=/tmp/terra-install.log
 
