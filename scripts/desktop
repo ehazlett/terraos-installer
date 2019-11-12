@@ -1,0 +1,44 @@
+#!/bin/bash
+tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$
+trap "rm -f $tmpfile" 0 1 2 5 15
+
+sed -i 's/^#http/http/g' /etc/apk/repositories
+apk update > /dev/null
+
+echo "starting desktop installation" >> ${LOG}
+counter=0
+(
+    # xorg
+    counter=10
+    cat <<EOF
+XXX
+$counter
+Installing Xorg...
+XXX
+EOF
+    setup-xorg-base >>${LOG} 2>&1
+    Xorg -configure >>${LOG} 2>&1
+    mv /root/xorg.conf.new /etc/X11/xorg.conf
+    # extra video
+    apk add mesa-dri-swrast
+
+    # desktop
+    counter=60
+    cat <<EOF
+XXX
+$counter
+Installing Terra desktop...
+XXX
+EOF
+    apk add terraos-desktop >> ${LOG} 2>&1
+
+    counter=100
+    cat <<EOF
+XXX
+$counter
+Desktop installation complete.
+XXX
+EOF
+    echo "installation complete" >> ${LOG}
+    sleep 4
+) | dialog --backtitle "$APP_TITLE" --title "Terra Desktop Installation" --gauge "Please wait..." 7 70 0

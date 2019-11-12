@@ -22,7 +22,7 @@ if [[ $? -eq 0 ]]; then
         if [ "${pass}" = "${passconfirm}" ]; then
             break
         fi
-        dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Passwords do not match.  Try again."
+        dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Passwords do not match.  Try again." 6 60
     done
     disk=$(cat $tmpfile)
     echo "starting installation to ${disk}" >> ${LOG}
@@ -38,6 +38,7 @@ XXX
 EOF
         echo "setting up mirror ${MIRROR}" >> ${LOG}
         setup-apkrepos "${MIRROR}"
+        echo "https://alpine.stellarproject.io/terra" >> /etc/apk/repositories
         apk update >> ${LOG} 2>&1
         # prereqs
         echo "installing prereqs" >> ${LOG}
@@ -235,6 +236,7 @@ EOF
         echo "updating boot config ${bootdir}/extlinux.conf" >> ${LOG}
         sed -i 's/DEFAULT.*/DEFAULT vesamenu.c32/' ${bootdir}/extlinux.conf
         sed -i 's/MENU TITLE.*/MENU TITLE Terra OS/' ${bootdir}/extlinux.conf
+        sed -i 's/MENU LABEL.*/MENU LABEL Terra/' ${bootdir}/extlinux.conf
         sed -i 's/MENU AUTOBOOT.*/MENU AUTOBOOT Terra OS will boot in # seconds./' ${bootdir}/extlinux.conf
         cat <<EOF>> $bootdir/extlinux.conf
 MENU BACKGROUND bg.jpg
@@ -267,6 +269,5 @@ XXX
 EOF
         echo "installation complete" >> ${LOG}
     ) | dialog --backtitle "$APP_TITLE" --title "Terra Installation" --gauge "Please wait..." 7 70 0
-    dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Installation successful.  Please reboot." 6 50
 fi
 

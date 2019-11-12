@@ -1,0 +1,11 @@
+#!/bin/bash
+
+MOUNTS=$(mount | grep /mnt | awk '{print $3}' | awk '{ print length($0) " " $0; }'| sort -r -n | cut -d ' ' -f 2-)
+
+for m in $MOUNTS; do
+    # skip base and boot mount points
+    if [ "$m" = "/mnt/boot" ] || [ "$m" = "/mnt" ]; then
+        continue
+    fi
+    umount $m
+done

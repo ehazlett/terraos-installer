@@ -1,0 +1,8 @@
+#!/bin/bash
+mount --rbind /dev /mnt/dev
+mount --rbind /run /mnt/run
+mount --rbind /sys /mnt/sys
+mount --bind /tmp /mnt/tmp
+
+mount --make-rslave /mnt/dev
+mount --make-rslave /mnt/run

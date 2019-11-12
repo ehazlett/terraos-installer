@@ -1,0 +1,58 @@
+#!/bin/bash
+
+title="User Configuration"
+tmpinfo=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+tmpuser=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+tmprootpass=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+tmprootpassconfirm=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+tmppass=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+tmppassconfirm=$(mktemp 2>/dev/null) || tmpfile="/tmp/test$(date +%N)"
+
+trap "rm -f $tmpinfo $tmpuser $tmppass $tmppassconfirm $tmprootpass $tmprootpassconfirm" 0 1 2 5 15
+
+while true; do
+    dialog --backtitle "$APP_TITLE" --passwordbox "Root password: " 10 60 2> $tmprootpass
+    dialog --backtitle "$APP_TITLE" --passwordbox "Root password (confirm): " 10 60 2> $tmprootpassconfirm
+    pass=$(cat $tmprootpass)
+    passconfirm=$(cat $tmprootpassconfirm)
+    if [ "${pass}" = "${passconfirm}" ]; then
+        break
+    fi
+    dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Passwords do not match.  Try again." 6 60
+done
+
+dialog --backtitle "$APP_TITLE" --title "$title" --inputbox "Full name: " \
+	10 60 "" 2> $tmpinfo
+
+dialog --backtitle "$APP_TITLE" --title "$title" --inputbox "Username: " \
+    10 60 "$(echo $(cat $tmpinfo) | cut -d' ' -f1| tr '[:upper:]' '[:lower:]')" 2> $tmpuser
+
+while true; do
+    dialog --backtitle "$APP_TITLE" --title "$title" --passwordbox "Password: " 10 60 2> $tmppass
+    dialog --backtitle "$APP_TITLE" --title "$title" --passwordbox "Password (confirm): " 10 60 2> $tmppassconfirm
+    pass=$(cat $tmppass)
+    passconfirm=$(cat $tmppassconfirm)
+    if [ "${pass}" = "${passconfirm}" ]; then
+        break
+    fi
+    dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Passwords do not match.  Try again." 6 60
+done
+
+username=$(cat $tmpuser)
+userinfo=$(cat $tmpinfo)
+password=$(cat $tmppass)
+rootpassword=$(cat $tmprootpass)
+
+# root
+echo "root:$rootpassword" | chpasswd
+
+# user
+adduser -g "$userinfo" -D $username
+# set pass
+echo "$username:$password" | chpasswd
+
+# sudo
+addgroup sudo
+
+# groups
+for grp in sudo audio pulse pulse-access video; do addgroup $username $grp > /dev/null 2>&1; done

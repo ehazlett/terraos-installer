@@ -27,11 +27,25 @@ do
         hostname "Configure Hostname" \
         network "Configure Network" \
         system "Install System" \
+        desktop "Install Desktop" \
+        user "Configure User" \
         reboot "Reboot" 2> $tmpfile
     rval=$?
     case $rval in
         $DIALOG_OK)
-            $SCRIPTDIR/$(cat $tmpfile)
+            script=$(cat $tmpfile)
+            case $script in
+                desktop|user)
+                    # run in chroot
+                    $SCRIPTDIR/chroot-mount >/dev/null 2>&1
+                    cp $SCRIPTDIR/$script /mnt/tmp/$script
+                    chroot /mnt /tmp/$script
+                    $SCRIPTDIR/chroot-unmount >/dev/null 2>&1
+                    ;;
+                *)
+                    $SCRIPTDIR/$(cat $tmpfile)
+                    ;;
+            esac
             # catch exit from script to exit installer
             if [ $? -eq 255 ]; then
                 exit 0
@@ -45,8 +59,8 @@ do
             exit 0
             ;;
         *)
-            sleep 5
+            sleep 2
             ;;
     esac
-    sleep 3
+    sleep 2
 done
