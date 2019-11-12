@@ -37,6 +37,7 @@ do
             case $script in
                 desktop|user)
                     # run in chroot
+                    echo "Preparing chroot.  Please wait..."
                     $SCRIPTDIR/chroot-mount >/dev/null 2>&1
                     cp $SCRIPTDIR/$script /mnt/tmp/$script
                     chroot /mnt /tmp/$script
