@@ -43,7 +43,7 @@ EOF
         cur_item=$(echo $cur_file | cut -d'/' -f1 | tr -d '(')
         total_items=$(echo $cur_file | cut -d'/' -f2 | cut -d' ' -f1 | tr -d ')')
         counter=$(printf "%.0f" $(bc<<<"scale=1; $cur_item/$total_items * 100"))
-        sleep 0.5
+        sleep 0.25
     done
 ) | dialog --backtitle "$APP_TITLE" --title "Desktop Installation" --gauge "Please wait..." 10 70 0
 

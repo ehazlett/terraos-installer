@@ -15,7 +15,11 @@ dialog --backtitle "$APP_TITLE" --title "$title" --defaultno --yesno "This will 
 if [[ $? -eq 0 ]]; then
     # prompt for encryption pass
     while true; do
-        dialog --backtitle "$APP_TITLE" --title "$title" --passwordbox "Enter system encryption passphrase: " 10 60 2> $tmppass
+        dialog --backtitle "$APP_TITLE" --title "$title" --passwordbox "Enter system encryption passphrase (blank to disable): " 10 60 2> $tmppass
+        # break on blank
+        if [ -z "$(cat $tmppass)" ]; then
+            break
+        fi
         dialog --backtitle "$APP_TITLE" --title "$title" --passwordbox "Enter system encryption passphrase (confirm): " 10 60 2> $tmppassconfirm
         pass=$(cat $tmppass)
         passconfirm=$(cat $tmppassconfirm)
@@ -25,6 +29,10 @@ if [[ $? -eq 0 ]]; then
         dialog --backtitle "$APP_TITLE" --title "$title" --msgbox "Passwords do not match.  Try again." 6 60
     done
     disk=$(cat $tmpfile)
+    encrypt="1"
+    if [ -z "$pass"]; then
+        encrypt=""
+    fi
     echo "starting installation to ${disk}" >> ${LOG}
     # apk
     (
@@ -136,11 +144,15 @@ EOF
         set -e
         # format
         mkfs.vfat -F32 ${part1} >> ${LOG} 2>&1
-        # encryption
-        echo "setting up encryption on ${part2}" >> ${LOG}
-        encpass=$(cat $tmppass)
-        echo -n "$encpass" | cryptsetup luksFormat -q ${part2} -
-        echo -n "$encpass" | cryptsetup luksOpen ${part2} system -
+        # encryption if enabled
+        target="${part2}"
+        if [ ! -z "$encrypt" ]; then
+            target="/dev/mapper/system"
+            echo "setting up encryption on ${part2}" >> ${LOG}
+            encpass=$(cat $tmppass)
+            echo -n "$encpass" | cryptsetup luksFormat -q ${part2} -
+            echo -n "$encpass" | cryptsetup luksOpen ${part2} system -
+        fi
         # zfs
         rc-update add zfs-mount boot
         sleep 0.5
@@ -151,7 +163,7 @@ XXX
 Configuring ZFS...
 XXX
 EOF
-        echo "configuring ZFS for ${part2}" >> ${LOG}
+        echo "configuring ZFS for ${target}" >> ${LOG}
         zpool create \
             -o ashift=12 \
             -O normalization=formD \
@@ -159,7 +171,7 @@ EOF
             -m none \
             -R /mnt \
             -O compression=lz4 \
-            tank /dev/mapper/system
+            tank $target
         zfs create -o mountpoint=none -o canmount=off tank/root
         zfs create -o mountpoint=/ tank/root/terra
         zfs create -o mountpoint=/home tank/home
@@ -203,7 +215,9 @@ EOF
             dd bs=440 count=1 conv=notrunc if=/mnt/usr/share/syslinux/mbr.bin of=${disk} >/dev/null 2>&1
         fi
         # crypttab
-        echo "system ${part2} none luks" > /mnt/etc/crypttab
+        if [ ! -z "$encrypt" ]; then
+            echo "system ${part2} none luks" > /mnt/etc/crypttab
+        fi
         # remove zfs and unneeded mounts from /mnt/etc/fstab
         sleep 0.5
         cat <<EOF
@@ -217,7 +231,9 @@ EOF
         sed -i '/cdrom/d' /mnt/etc/fstab
         sed -i '/usbdisk/d' /mnt/etc/fstab
         # append cryptsetup to /mnt/etc/mkinitfs/mkinitfs.conf
-        sed -i 's/base/base cryptsetup/' /mnt/etc/mkinitfs/mkinitfs.conf
+        if [ ! -z "$encrypt" ]; then
+            sed -i 's/base/base cryptsetup/' /mnt/etc/mkinitfs/mkinitfs.conf
+        fi
         if [ ! -z "$nvme" ]; then
             echo "adding NVME support to initfs" >> ${LOG}
             # add nvme to /mnt/etc/mkinitfs/mkinitfs.conf
@@ -230,7 +246,9 @@ EOF
         fi
         echo "setting up boot directory ${bootdir}" >> ${LOG}
         subpart=$(echo $part2 | sed 's/\//\\\//g')
-        sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' ${bootdir}/extlinux.conf
+        if [ ! -z "$encrypt" ]; then
+            sed -i 's/\(\APPEND.*\)/\1 cryptroot='"$subpart"' cryptdm=system/g' ${bootdir}/extlinux.conf
+        fi
         # bootsplash
         echo "configuring bootsplash ${bootdir}/bg.jpg" >> ${LOG}
         cp -f ${BASE_DIR}/media/bg.jpg ${bootdir}/bg.jpg
