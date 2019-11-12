@@ -26,13 +26,12 @@ if [[ $? -eq 0 ]]; then
     done
     disk=$(cat $tmpfile)
     echo "starting installation to ${disk}" >> ${LOG}
-    counter=0
     # apk
     (
-        counter=10
         cat <<EOF
 XXX
-$counter
+10
+
 Configuring installation environment...
 XXX
 EOF
@@ -57,10 +56,10 @@ EOF
         setup-sshd -c openssh >> ${LOG} 2>&1
         # disk
         sleep 0.5
-        counter=15
         cat <<EOF
 XXX
-$counter
+15
+
 Configuring system disk...
 XXX
 EOF
@@ -114,6 +113,7 @@ q
 EOF
         fi
         # wait for disk to settle
+        set +e
         echo "waiting for disk to settle" >> ${LOG}
         while true; do
             find /dev | grep ${part1} > /dev/null
@@ -133,6 +133,7 @@ EOF
             break
         done
         sleep 5
+        set -e
         # format
         mkfs.vfat -F32 ${part1} >> ${LOG} 2>&1
         # encryption
@@ -143,10 +144,10 @@ EOF
         # zfs
         rc-update add zfs-mount boot
         sleep 0.5
-        counter=20
         cat <<EOF
 XXX
-$counter
+20
+
 Configuring ZFS...
 XXX
 EOF
@@ -167,12 +168,12 @@ EOF
         echo "formatting boot partition ${part1}" >> ${LOG}
         mount -t vfat ${part1} /mnt/boot
         sleep 0.5
-        counter=30
         # install base
         echo "installing base system" >> ${LOG}
         cat <<EOF
 XXX
-$counter
+30
+
 Installing base system...
 XXX
 EOF
@@ -180,10 +181,10 @@ EOF
         (setup-disk -v -m sys /mnt >> ${LOG} 2>&1 || true)
         # efi
         sleep 0.5
-        counter=50
         cat <<EOF
 XXX
-$counter
+50
+
 Configuring boot...
 XXX
 EOF
@@ -205,10 +206,10 @@ EOF
         echo "system ${part2} none luks" > /mnt/etc/crypttab
         # remove zfs and unneeded mounts from /mnt/etc/fstab
         sleep 0.5
-        counter=60
         cat <<EOF
 XXX
-$counter
+60
+
 Configuring system...
 XXX
 EOF
@@ -250,20 +251,20 @@ EOF
         echo "setting motd" >> ${LOG}
         echo "Welcome to TerraOS!" > /mnt/etc/motd
         sleep 0.5
-        counter=90
         cat <<EOF
 XXX
-$counter
+90
+
 Updating initial ramdisk...
 XXX
 EOF
         # update initramfs
         echo "updating initfs" >> ${LOG}
         mkinitfs -c /mnt/etc/mkinitfs/mkinitfs.conf -b /mnt $(ls /mnt/lib/modules/)
-        counter=100
         cat <<EOF
 XXX
-$counter
+100
+
 Installation complete.
 XXX
 EOF
