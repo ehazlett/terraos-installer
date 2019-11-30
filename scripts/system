@@ -279,6 +279,22 @@ EOF
         # update initramfs
         echo "updating initfs" >> ${LOG}
         mkinitfs -c /mnt/etc/mkinitfs/mkinitfs.conf -b /mnt $(ls /mnt/lib/modules/)
+
+        # system config
+
+        $SCRIPTDIR/chroot-mount >/dev/null 2>&1
+        cat <<EOF > /mnt/tmp/systemconfig
+#!/bin/bash
+rc-update add udev sysinit
+rc-update add udev-trigger sysinit
+rc-update add udev-settle sysinit
+rc-update add zfs-mount
+EOF
+        chmod +x /mnt/tmp/systemconfig
+        chroot /mnt /tmp/systemconfig
+        rm /mnt/tmp/systemconfig
+        $SCRIPTDIR/chroot-unmount >/dev/null 2>&1
+
         cat <<EOF
 XXX
 100
