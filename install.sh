@@ -10,6 +10,7 @@ export APP_TITLE="Terra OS"
 export BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export SCRIPTDIR=${BASE_DIR}/scripts
 export MIRROR=${MIRROR:-"-1"}
+export STELLAR_MIRROR=${STELLAR_MIRROR:-https://alpine.stellarproject.io/terra}
 export LOG=/tmp/terra-install.log
 
 tmpfile=$(tempfile 2>/dev/null) || tmpfile=/tmp/test$$

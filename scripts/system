@@ -45,7 +45,7 @@ XXX
 EOF
         echo "setting up mirror ${MIRROR}" >> ${LOG}
         setup-apkrepos "${MIRROR}"
-        echo "https://alpine.stellarproject.io/terra" >> /etc/apk/repositories
+        echo "${STELLAR_MIRROR}" >> /etc/apk/repositories
         apk update >> ${LOG} 2>&1
         # prereqs
         echo "installing prereqs" >> ${LOG}
@@ -265,6 +265,8 @@ MENU COLOR border * #dededede #00000000 none
 MENU COLOR title * #dededede #00000000 none
 MENU COLOR tabmsg * #dededede #00000000 none
 EOF
+        # remove home dir to allow for zfs mount
+        rmdir /mnt/home
         # motd
         echo "setting motd" >> ${LOG}
         echo "Welcome to TerraOS!" > /mnt/etc/motd
