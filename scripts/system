@@ -265,8 +265,6 @@ MENU COLOR border * #dededede #00000000 none
 MENU COLOR title * #dededede #00000000 none
 MENU COLOR tabmsg * #dededede #00000000 none
 EOF
-        # remove home dir to allow for zfs mount
-        rmdir /mnt/home
         # motd
         echo "setting motd" >> ${LOG}
         echo "Welcome to TerraOS!" > /mnt/etc/motd
